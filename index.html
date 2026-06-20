@@ -1,0 +1,1494 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#07111F" />
+<title>MAM — AI Commerce OS</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  html,body{margin:0;padding:0;background:#07111F;}
+  #root{min-height:100vh;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+
+
+
+/* ════════════════════════════════════════════════════════════
+   MAM — AI Commerce OS
+   3 portals: Customer • Merchant • Advertiser
+   Palette: navy / blue / green (+ violet for advertiser zone)
+════════════════════════════════════════════════════════════ */
+
+const C = {
+  navy: "#07111F", card: "#0D1B2E", card2: "#111E33",
+  blue: "#1A6FFF", green: "#00C896", white: "#FFFFFF",
+  muted: "#6B80A0", border: "rgba(30,111,255,.18)", gBorder: "rgba(0,200,150,.22)",
+  violet: "#7C3AED", vBorder: "rgba(124,58,237,.28)", amber: "#F59E0B", red: "#EF4444",
+};
+const grad = (a = C.blue, b = C.green, deg = 135) => `linear-gradient(${deg}deg,${a},${b})`;
+const pill = (bg, color, extra = {}) => ({ background: bg, color, borderRadius: 999, padding: "4px 12px", fontSize: 11, fontWeight: 700, ...extra });
+
+function Logo({ size = 44 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
+      <defs>
+        <linearGradient id="lg1" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#1A6FFF" /><stop offset="55%" stopColor="#00C896" /><stop offset="100%" stopColor="#fff" stopOpacity=".85" />
+        </linearGradient>
+        <filter id="gf"><feGaussianBlur stdDeviation="2.5" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+      </defs>
+      <ellipse cx="32" cy="26" rx="21" ry="23" fill="url(#lg1)" filter="url(#gf)" />
+      <path d="M32 49 Q29 56 32 62" stroke={C.green} strokeWidth="1.8" strokeLinecap="round" fill="none" />
+      <circle cx="32" cy="63" r="1.8" fill={C.green} />
+      <text x="32" y="21" textAnchor="middle" fontFamily="Arial Black,sans-serif" fontWeight="900" fontSize="9.5" fill="white" letterSpacing="-.4">MAM</text>
+      <text x="32" y="34" textAnchor="middle" fontFamily="Arial,sans-serif" fontWeight="800" fontSize="11" fill="white" opacity=".9">%</text>
+    </svg>
+  );
+}
+
+function Toast({ msg, onDone }) {
+  useEffect(() => { const t = setTimeout(onDone, 2400); return () => clearTimeout(t); }, []);
+  return (
+    <div style={{ position: "fixed", top: 72, left: "50%", transform: "translateX(-50%)", background: grad(), color: "#fff", borderRadius: 12, padding: "10px 22px", fontSize: 13, fontWeight: 700, zIndex: 9999, boxShadow: "0 6px 24px rgba(0,0,0,.4)", whiteSpace: "nowrap" }}>
+      ✓ {msg}
+    </div>
+  );
+}
+
+const GlobalStyle = () => (
+  <style>{`
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0}
+    body,input,textarea,select{font-family:'Cairo',sans-serif}
+    .btn{cursor:pointer;border:none;transition:all .18s;font-family:'Cairo',sans-serif}
+    .btn:hover{filter:brightness(1.12);transform:translateY(-1px)}
+    .btn:active{transform:scale(.97)}
+    .card{transition:box-shadow .2s}
+    .card:hover{box-shadow:0 8px 32px rgba(26,111,255,.18)}
+    input:focus,textarea:focus,select:focus{outline:none;border-color:${C.blue}!important}
+    ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-track{background:${C.navy}}::-webkit-scrollbar-thumb{background:${C.blue}55;border-radius:2px}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+    .fadein{animation:fadeIn .3s ease}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+    .pulse{animation:pulse 1.8s infinite}
+    @keyframes bid{0%{transform:scale(1)}50%{transform:scale(1.07)}100%{transform:scale(1)}}
+    .bidpulse{animation:bid .6s ease}
+    @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+    .spin{animation:spin 1s linear infinite}
+    @keyframes glowmove{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+  `}</style>
+);
+
+/* ════════════════════════════════════════════════════════════
+   ROOT APP — Role gate
+════════════════════════════════════════════════════════════ */
+function App() {
+  const [role, setRole] = useState(null); // null | customer | merchant | advertiser
+  const [toast, setToast] = useState(null);
+  const showToast = m => setToast(m);
+
+  return (
+    <div style={{ fontFamily: "Cairo,sans-serif", direction: "rtl", background: C.navy, minHeight: "100vh", color: C.white }}>
+      <GlobalStyle />
+      {toast && <Toast msg={toast} onDone={() => setToast(null)} />}
+      {!role && <RoleGate onPick={setRole} />}
+      {role === "customer" && <CustomerApp showToast={showToast} onExit={() => setRole(null)} />}
+      {role === "merchant" && <MerchantApp showToast={showToast} onExit={() => setRole(null)} />}
+      {role === "advertiser" && <AdvertiserApp showToast={showToast} onExit={() => setRole(null)} />}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   ROLE GATE
+════════════════════════════════════════════════════════════ */
+function RoleGate({ onPick }) {
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 20px", background: `radial-gradient(ellipse at 50% 0%, rgba(30,111,255,.18) 0%, transparent 65%)` }}>
+      <Logo size={88} />
+      <div style={{ fontSize: 12, color: C.green, fontWeight: 700, letterSpacing: 3, marginTop: 18, textTransform: "uppercase" }}>AI Commerce Operating System</div>
+      <h1 style={{ fontSize: "clamp(26px,6vw,38px)", fontWeight: 900, textAlign: "center", marginTop: 10, marginBottom: 6 }}>
+        <span style={{ background: grad(), WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>MAM</span>
+      </h1>
+      <div style={{ color: C.muted, fontSize: 13, textAlign: "center", marginBottom: 36, maxWidth: 320, lineHeight: 1.7 }}>
+        شبكة واحدة تربط التاجر، العميل، والمعلن — بالذكاء الاصطناعي
+      </div>
+
+      <div style={{ width: "100%", maxWidth: 380, display: "grid", gap: 12 }}>
+        {[
+          { id: "customer", icon: "🛍️", title: "أنا عميل", desc: "تسوّق، قارن، اشترِ بذكاء", color: C.blue },
+          { id: "merchant", icon: "🏪", title: "أنا تاجر", desc: "أدر متجرك بالذكاء الاصطناعي", color: C.green },
+          { id: "advertiser", icon: "📢", title: "أنا معلن", desc: "زايد واستهدف عملاءك الحقيقيين", color: C.violet },
+        ].map(r => (
+          <button key={r.id} className="btn card" onClick={() => onPick(r.id)}
+            style={{ background: C.card, border: `1px solid ${r.color}33`, borderRadius: 16, padding: "16px 18px", display: "flex", alignItems: "center", gap: 14, textAlign: "right" }}>
+            <div style={{ width: 48, height: 48, borderRadius: 14, background: `${r.color}22`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0 }}>{r.icon}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 800, fontSize: 15 }}>{r.title}</div>
+              <div style={{ fontSize: 12, color: C.muted }}>{r.desc}</div>
+            </div>
+            <div style={{ color: r.color, fontSize: 18 }}>←</div>
+          </button>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 32, display: "flex", gap: 18, fontSize: 11, color: C.muted }}>
+        <span>📱 iOS</span><span>🤖 Android</span><span>🌐 Web</span>
+      </div>
+    </div>
+  );
+}
+
+/* portal header used by all 3 apps */
+function PortalHeader({ title, color, onExit }) {
+  return (
+    <nav style={{ background: "rgba(7,17,31,.97)", backdropFilter: "blur(14px)", borderBottom: `1px solid ${color}33`, padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 58, position: "sticky", top: 0, zIndex: 100 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Logo size={34} />
+        <div>
+          <div style={{ fontWeight: 900, fontSize: 14, color }}>MAM</div>
+          <div style={{ fontSize: 9, color: C.muted }}>{title}</div>
+        </div>
+      </div>
+      <button className="btn" onClick={onExit} style={{ background: "transparent", color: C.muted, fontSize: 12, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 12px" }}>تبديل الحساب ⇄</button>
+    </nav>
+  );
+}
+
+function BottomNav({ items, active, setActive, color }) {
+  return (
+    <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(7,17,31,.98)", backdropFilter: "blur(14px)", borderTop: `1px solid ${color}33`, display: "flex", justifyContent: "space-around", padding: "8px 0 14px", zIndex: 90 }}>
+      {items.map(it => (
+        <button key={it.id} className="btn" onClick={() => setActive(it.id)} style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, background: "transparent", padding: "4px 6px", minWidth: 50 }}>
+          <span style={{ fontSize: 17, position: "relative" }}>
+            {it.icon}
+            {!!it.badge && <span style={{ position: "absolute", top: -4, left: -8, background: C.red, color: "#fff", borderRadius: "50%", width: 14, height: 14, fontSize: 8, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center" }}>{it.badge}</span>}
+          </span>
+          <span style={{ fontSize: 9, color: active === it.id ? color : C.muted, fontWeight: active === it.id ? 700 : 400 }}>{it.label}</span>
+          {active === it.id && <div style={{ width: 5, height: 5, borderRadius: "50%", background: color, marginTop: 1 }} />}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   ░░░ CUSTOMER APP ░░░
+════════════════════════════════════════════════════════════ */
+function CustomerApp({ showToast, onExit }) {
+  const [tab, setTab] = useState("home");
+  const [cart, setCart] = useState(2);
+  const [unread, setUnread] = useState(3);
+  const TABS = [
+    { id: "home", icon: "🔍", label: "البحث" },
+    { id: "mall", icon: "🏬", label: "المول" },
+    { id: "allstores", icon: "🗂️", label: "كل المتاجر" },
+    { id: "map", icon: "📍", label: "الخريطة" },
+    { id: "cart", icon: "🛒", label: "السلة" },
+    { id: "messages", icon: "💬", label: "رسائلي", badge: unread },
+    { id: "wallet", icon: "💳", label: "محفظتي" },
+    { id: "invoice", icon: "🧾", label: "فاتورتي" },
+  ];
+  return (
+    <div style={{ paddingBottom: 80 }}>
+      <PortalHeader title="بوابة العميل" color={C.blue} onExit={onExit} />
+      <div className="fadein" key={tab}>
+        {tab === "home" && <CustomerHome showToast={showToast} setCart={setCart} setTab={setTab} />}
+        {tab === "mall" && <VirtualMall showToast={showToast} setCart={setCart} />}
+        {tab === "allstores" && <AllStoresHub showToast={showToast} />}
+        {tab === "map" && <GeoMap showToast={showToast} />}
+        {tab === "cart" && <SmartCart showToast={showToast} cart={cart} setCart={setCart} setTab={setTab} />}
+        {tab === "messages" && <CustomerMessages showToast={showToast} unread={unread} setUnread={setUnread} />}
+        {tab === "wallet" && <LoyaltyWallet showToast={showToast} />}
+        {tab === "invoice" && <CustomerInvoice showToast={showToast} />}
+      </div>
+      <BottomNav items={TABS} active={tab} setActive={setTab} color={C.blue} />
+    </div>
+  );
+}
+
+/* — Customer: Home / AI Search + Shopper Agent — */
+function CustomerHome({ showToast, setCart, setTab }) {
+  const [q, setQ] = useState("");
+  const [agentMsg, setAgentMsg] = useState("");
+  const [agentReply, setAgentReply] = useState(null);
+  const [thinking, setThinking] = useState(false);
+  const [results, setResults] = useState(null);
+
+  const suggestions = ["ساعة ذكية بـ100 ريال", "أرخص هاتف متوفر", "سماعة لاسلكية", "هدية لعيد ميلاد صديقي"];
+
+  const runAgent = (text) => {
+    setThinking(true); setAgentReply(null); setResults(null);
+    setTimeout(() => {
+      setThinking(false);
+      if (text.includes("ساعة")) {
+        setAgentReply({ summary: "قارنت 14 ساعة ذكية ضمن ميزانيتك — هذا أفضل خيار:", pick: { n: "ساعة Xiaomi Smart Band 9", p: "95", store: "متجر التقنية", why: "أعلى تقييم ضمن حدود 100 ريال + توصيل خلال ساعتين", img: "⌚" } });
+      } else if (text.includes("هاتف") || text.includes("أرخص")) {
+        setAgentReply({ summary: "بحثت بين 47 متجر عن أرخص هاتف بمواصفات جيدة:", pick: { n: "Redmi Note 13", p: "699", store: "موبايل سنتر", why: "أقل سعر مع ضمان رسمي سنة كاملة", img: "📱" } });
+      } else if (text.includes("هدية")) {
+        setAgentReply({ summary: "اقترحت هدايا حسب المناسبة وميزانية متوسطة:", pick: { n: "سماعة JBL + بطاقة هدية", p: "249", store: "صوت وصورة", why: "الأعلى تقييماً كهدية أعياد ميلاد هذا الشهر", img: "🎁" } });
+      } else {
+        setResults([
+          { n: "سماعة Sony WH-1000XM5", p: "999", store: "صوت وصورة", img: "🎧", rate: 4.9 },
+          { n: "سماعة JBL Tune", p: "199", store: "متجر التقنية", img: "🎧", rate: 4.5 },
+          { n: "سماعة Apple AirPods Pro", p: "799", store: "آبل ستور", img: "🎧", rate: 4.8 },
+        ]);
+      }
+    }, 1300);
+  };
+
+  return (
+    <div style={{ padding: "20px 16px" }}>
+      <div style={{ textAlign: "center", marginBottom: 18 }}>
+        <div style={{ fontSize: 12, color: C.green, fontWeight: 700, letterSpacing: 2 }}>AI SHOPPER AGENT</div>
+        <h2 style={{ fontWeight: 900, fontSize: 19, marginTop: 4 }}>قل لي وش تبي، وأنا أدبرها</h2>
+      </div>
+
+      {/* AI agent input */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 14, marginBottom: 14 }}>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="مثال: أبغى ساعة بـ100 ريال..."
+            style={{ flex: 1, background: C.card2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "11px 14px", color: C.white, fontSize: 13 }} />
+          <button className="btn" onClick={() => q.trim() && runAgent(q)}
+            style={{ background: grad(), color: C.white, borderRadius: 10, padding: "0 18px", fontSize: 13, fontWeight: 700 }}>🤖</button>
+        </div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+          {suggestions.map(s => (
+            <button key={s} className="btn" onClick={() => { setQ(s); runAgent(s); }}
+              style={{ background: `${C.blue}15`, color: C.blue, border: `1px solid ${C.blue}33`, borderRadius: 999, padding: "5px 12px", fontSize: 11 }}>{s}</button>
+          ))}
+        </div>
+      </div>
+
+      {thinking && (
+        <div style={{ textAlign: "center", padding: "24px 0", color: C.muted, fontSize: 13 }}>
+          <div className="spin" style={{ width: 28, height: 28, border: `3px solid ${C.border}`, borderTop: `3px solid ${C.green}`, borderRadius: "50%", margin: "0 auto 10px" }} />
+          AI يقارن بين المتاجر...
+        </div>
+      )}
+
+      {agentReply && (
+        <div className="fadein" style={{ background: `linear-gradient(135deg,rgba(0,200,150,.1),rgba(26,111,255,.08))`, border: `1px solid ${C.gBorder}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
+          <div style={{ fontSize: 12, color: C.green, fontWeight: 700, marginBottom: 10 }}>🤖 {agentReply.summary}</div>
+          <div style={{ display: "flex", gap: 12, alignItems: "center", background: C.card2, borderRadius: 12, padding: 12 }}>
+            <div style={{ fontSize: 32 }}>{agentReply.pick.img}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>{agentReply.pick.n}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>{agentReply.pick.store}</div>
+              <div style={{ fontWeight: 900, fontSize: 16, color: C.green }}>{agentReply.pick.p} ر.س</div>
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, margin: "8px 0 12px" }}>💡 {agentReply.pick.why}</div>
+          <button className="btn" onClick={() => { setCart(c => c + 1); showToast("✅ AI أضافها لسلتك مباشرة!"); }}
+            style={{ width: "100%", background: grad(), color: C.white, borderRadius: 10, padding: "10px 0", fontSize: 13, fontWeight: 700 }}>
+            ⚡ اشترِها الآن نيابة عني
+          </button>
+        </div>
+      )}
+
+      {results && (
+        <div className="fadein" style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>وجدت {results.length} نتائج من متاجر مختلفة:</div>
+          {results.map(r => (
+            <div key={r.n} className="card" style={{ background: C.card, borderRadius: 12, padding: 12, border: `1px solid ${C.border}`, display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
+              <div style={{ fontSize: 26 }}>{r.img}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 12 }}>{r.n}</div>
+                <div style={{ fontSize: 10, color: C.muted }}>{r.store} · ⭐ {r.rate}</div>
+              </div>
+              <div style={{ fontWeight: 900, fontSize: 14, color: C.green }}>{r.p}</div>
+              <button className="btn" onClick={() => { setCart(c => c + 1); showToast("أُضيف للسلة"); }} style={{ background: grad(), color: "#fff", borderRadius: 8, padding: "6px 10px", fontSize: 11 }}>+</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* quick actions */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 18 }}>
+        <button className="btn" onClick={() => setTab("mall")} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "16px 12px", textAlign: "center" }}>
+          <div style={{ fontSize: 24, marginBottom: 6 }}>🏬</div>
+          <div style={{ fontWeight: 700, fontSize: 12 }}>تجول في المول الافتراضي</div>
+        </button>
+        <button className="btn" onClick={() => { setCart(c => c + 1); showToast("⚡ شراء فوري — تم الدفع!"); }} style={{ background: `linear-gradient(135deg,${C.green},${C.blue})`, borderRadius: 14, padding: "16px 12px", textAlign: "center" }}>
+          <div style={{ fontSize: 24, marginBottom: 6 }}>⚡</div>
+          <div style={{ fontWeight: 700, fontSize: 12 }}>شراء فوري بدون سلة</div>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* — Customer: Virtual Mall (store crawling) — */
+function VirtualMall({ showToast, setCart }) {
+  const [floor, setFloor] = useState("الطابق الأرضي");
+  const FLOORS = {
+    "الطابق الأرضي": { stores: [{ n: "متجر التقنية", icon: "💻", color: C.blue, dist: "0.8 كم" }, { n: "صوت وصورة", icon: "🎧", color: C.green, dist: "1.2 كم" }] },
+    "الطابق الأول": { stores: [{ n: "أزياء عصرية", icon: "👕", color: C.violet, dist: "2.1 كم" }, { n: "بيت الجمال", icon: "💄", color: "#EC4899", dist: "1.5 كم" }] },
+    "طابق الطعام": { stores: [{ n: "سوبر ماركت السعادة", icon: "🛒", color: C.amber, dist: "0.5 كم" }, { n: "مخبز الأصالة", icon: "🍞", color: C.red, dist: "0.9 كم" }] },
+  };
+  return (
+    <div style={{ padding: "18px 16px" }}>
+      <div style={{ fontWeight: 900, fontSize: 17, marginBottom: 4 }}>🏬 المول الافتراضي العالمي</div>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>تجوّل بين آلاف المتاجر بدون تطبيقات متعددة</div>
+
+      <div style={{ display: "flex", gap: 6, marginBottom: 16, overflowX: "auto" }}>
+        {Object.keys(FLOORS).map(f => (
+          <button key={f} className="btn" onClick={() => setFloor(f)}
+            style={{ background: floor === f ? grad() : C.card2, color: floor === f ? "#fff" : C.muted, borderRadius: 999, padding: "8px 16px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>{f}</button>
+        ))}
+      </div>
+
+      {/* "near you" live map style list */}
+      <div style={{ background: `linear-gradient(135deg,rgba(26,111,255,.12),rgba(0,200,150,.06))`, border: `1px solid ${C.border}`, borderRadius: 14, padding: 12, marginBottom: 14, display: "flex", alignItems: "center", gap: 10 }}>
+        <span className="pulse" style={{ width: 8, height: 8, borderRadius: "50%", background: C.green }} />
+        <div style={{ fontSize: 12, color: C.muted }}>📍 يعرض المتاجر القريبة منك الآن بالمخزون الفوري</div>
+      </div>
+
+      <div style={{ display: "grid", gap: 12 }}>
+        {FLOORS[floor].stores.map(s => (
+          <div key={s.n} className="card" style={{ background: C.card, borderRadius: 14, padding: 14, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 50, height: 50, borderRadius: 14, background: `${s.color}22`, border: `2px solid ${s.color}55`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{s.icon}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>{s.n}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>📍 {s.dist} · مخزون متوفر الآن</div>
+              <span style={pill(`${C.green}20`, C.green, { fontSize: 10, marginTop: 4, display: "inline-block" })}>استلام خلال دقائق</span>
+            </div>
+            <button className="btn" onClick={() => { setCart(c => c + 1); showToast(`دخلت متجر ${s.n}`); }}
+              style={{ background: grad(), color: "#fff", borderRadius: 10, padding: "8px 14px", fontSize: 12, fontWeight: 700 }}>ادخل</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* — Customer: All Stores Hub (شبكة موحدة لجميع المتاجر) — */
+function AllStoresHub({ showToast }) {
+  const [filter, setFilter] = useState("الكل");
+  const [search, setSearch] = useState("");
+  const CATS = ["الكل", "إلكترونيات", "أزياء", "طعام", "صحة وجمال", "منزل"];
+  const STORES = [
+    { n: "متجر التقنية الذهبي", cat: "إلكترونيات", rating: 4.9, items: 1240, icon: "💻", color: C.blue, verified: true },
+    { n: "صوت وصورة", cat: "إلكترونيات", rating: 4.8, items: 870, icon: "🎧", color: C.blue, verified: true },
+    { n: "أزياء عصرية", cat: "أزياء", rating: 4.7, items: 560, icon: "👕", color: C.violet, verified: false },
+    { n: "بيت الجمال", cat: "صحة وجمال", rating: 4.9, items: 320, icon: "💄", color: "#EC4899", verified: true },
+    { n: "سوبر ماركت السعادة", cat: "طعام", rating: 4.6, items: 2100, icon: "🛒", color: C.amber, verified: true },
+    { n: "أثاث ودكور", cat: "منزل", rating: 4.5, items: 410, icon: "🛋️", color: C.green, verified: false },
+    { n: "مخبز الأصالة", cat: "طعام", rating: 4.8, items: 95, icon: "🍞", color: C.amber, verified: true },
+    { n: "آبل ستور الرسمي", cat: "إلكترونيات", rating: 5.0, items: 180, icon: "📱", color: C.blue, verified: true },
+  ];
+
+  const filtered = STORES.filter(s => (filter === "الكل" || s.cat === filter) && s.n.includes(search));
+
+  return (
+    <div style={{ padding: "18px 16px" }}>
+      <div style={{ fontWeight: 900, fontSize: 17, marginBottom: 4 }}>🗂️ كل المتاجر — شبكة موحدة</div>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>{STORES.length}+ متجر في نظام واحد — بدون تطبيقات متعددة</div>
+
+      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ابحث عن متجر..."
+        style={{ width: "100%", background: C.card2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 14px", color: "#fff", fontSize: 13, marginBottom: 12 }} />
+
+      <div style={{ display: "flex", gap: 6, overflowX: "auto", marginBottom: 14, paddingBottom: 2 }}>
+        {CATS.map(c => (
+          <button key={c} className="btn" onClick={() => setFilter(c)}
+            style={{ background: filter === c ? grad() : C.card2, color: filter === c ? "#fff" : C.muted, borderRadius: 999, padding: "7px 14px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>{c}</button>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gap: 10 }}>
+        {filtered.map(s => (
+          <div key={s.n} className="card" style={{ background: C.card, borderRadius: 14, padding: 13, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 46, height: 46, borderRadius: 13, background: `${s.color}22`, border: `2px solid ${s.color}55`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{s.icon}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontWeight: 700, fontSize: 13 }}>{s.n}</span>
+                {s.verified && <span style={{ color: C.green, fontSize: 11 }}>✓</span>}
+              </div>
+              <div style={{ fontSize: 11, color: C.muted }}>{s.cat} · {s.items} منتج · ⭐ {s.rating}</div>
+            </div>
+            <button className="btn" onClick={() => showToast(`فتح ${s.n}`)} style={{ background: `${s.color}1c`, color: s.color, border: `1px solid ${s.color}44`, borderRadius: 9, padding: "7px 12px", fontSize: 11, fontWeight: 700 }}>زيارة</button>
+          </div>
+        ))}
+        {filtered.length === 0 && <div style={{ textAlign: "center", color: C.muted, fontSize: 12, padding: "30px 0" }}>لا توجد متاجر مطابقة</div>}
+      </div>
+    </div>
+  );
+}
+
+/* — Customer: Geo Map (الموقع الجغرافي للمتاجر) — */
+function GeoMap({ showToast }) {
+  const [selected, setSelected] = useState(null);
+  const STORES = [
+    { n: "متجر التقنية الذهبي", dist: 0.8, icon: "💻", color: C.blue, x: 45, y: 35, eta: "10 دقائق" },
+    { n: "صوت وصورة", dist: 1.2, icon: "🎧", color: C.green, x: 68, y: 52, eta: "15 دقيقة" },
+    { n: "أزياء عصرية", dist: 2.1, icon: "👕", color: C.violet, x: 25, y: 60, eta: "22 دقيقة" },
+    { n: "سوبر ماركت السعادة", dist: 0.5, icon: "🛒", color: C.amber, x: 55, y: 72, eta: "6 دقائق" },
+    { n: "بيت الجمال", dist: 1.5, icon: "💄", color: "#EC4899", x: 30, y: 28, eta: "18 دقيقة" },
+  ];
+
+  return (
+    <div style={{ padding: "18px 16px" }}>
+      <div style={{ fontWeight: 900, fontSize: 17, marginBottom: 4 }}>📍 المتاجر القريبة منك</div>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>خريطة حية — AI يرتب المتاجر حسب القرب والمخزون</div>
+
+      {/* Map area (stylized, not real geo tiles) */}
+      <div style={{ position: "relative", width: "100%", height: 280, background: `linear-gradient(160deg,${C.card},${C.card2})`, borderRadius: 18, border: `1px solid ${C.border}`, overflow: "hidden", marginBottom: 14 }}>
+        {/* faux map grid */}
+        <svg width="100%" height="100%" style={{ position: "absolute", inset: 0, opacity: .25 }}>
+          {[...Array(7)].map((_, i) => <line key={"h" + i} x1="0" y1={`${i * 16.6}%`} x2="100%" y2={`${i * 16.6}%`} stroke={C.muted} strokeWidth="0.5" />)}
+          {[...Array(7)].map((_, i) => <line key={"v" + i} x1={`${i * 16.6}%`} y1="0" x2={`${i * 16.6}%`} y2="100%" stroke={C.muted} strokeWidth="0.5" />)}
+        </svg>
+
+        {/* user pin (center-ish) */}
+        <div style={{ position: "absolute", left: "48%", top: "48%", transform: "translate(-50%,-50%)" }}>
+          <div className="pulse" style={{ width: 14, height: 14, borderRadius: "50%", background: C.blue, boxShadow: `0 0 0 6px ${C.blue}33` }} />
+          <div style={{ fontSize: 9, color: C.blue, fontWeight: 700, marginTop: 4, whiteSpace: "nowrap" }}>📍 موقعك</div>
+        </div>
+
+        {STORES.map(s => (
+          <button key={s.n} className="btn" onClick={() => setSelected(s)}
+            style={{ position: "absolute", left: `${s.x}%`, top: `${s.y}%`, transform: "translate(-50%,-50%)", background: selected?.n === s.n ? s.color : C.card, border: `2px solid ${s.color}`, borderRadius: "50%", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, zIndex: selected?.n === s.n ? 5 : 2 }}>
+            {s.icon}
+          </button>
+        ))}
+      </div>
+
+      {selected ? (
+        <div className="fadein" style={{ background: C.card, borderRadius: 14, padding: 14, border: `1px solid ${selected.color}55`, marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>{selected.icon} {selected.n}</div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>📏 {selected.dist} كم · 🚗 {selected.eta}</div>
+            </div>
+            <button className="btn" onClick={() => showToast(`فتح ${selected.n}`)} style={{ background: grad(), color: "#fff", borderRadius: 9, padding: "8px 14px", fontSize: 12, fontWeight: 700 }}>زيارة</button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ textAlign: "center", color: C.muted, fontSize: 12, marginBottom: 12 }}>اضغط على أي متجر بالخريطة لعرض التفاصيل</div>
+      )}
+
+      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>الأقرب إليك</div>
+      {[...STORES].sort((a, b) => a.dist - b.dist).slice(0, 3).map(s => (
+        <div key={s.n} onClick={() => setSelected(s)} className="btn" style={{ display: "flex", alignItems: "center", gap: 10, background: C.card2, borderRadius: 11, padding: 10, marginBottom: 8, border: `1px solid ${C.border}` }}>
+          <span style={{ fontSize: 18 }}>{s.icon}</span>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 600 }}>{s.n}</div></div>
+          <span style={{ fontSize: 11, color: C.muted }}>{s.dist} كم</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* — Customer: Messages (received from merchants + ads inside invoices) — */
+function CustomerMessages({ showToast, unread, setUnread }) {
+  const [items, setItems] = useState([
+    { id: 1, from: "متجر التقنية الذهبي", icon: "💻", color: C.blue, text: "طلبك #8841 في الطريق 🚚 — وصول خلال 3 ساعات", t: "منذ 5 دقائق", read: false, type: "متجر" },
+    { id: 2, from: "إعلان ممول", icon: "📢", color: C.violet, text: "AirPods Pro 3 بعرض خاص لمشتري آيفون — 799 ر.س فقط", t: "منذ 20 دقيقة", read: false, type: "إعلان" },
+    { id: 3, from: "صوت وصورة", icon: "🎧", color: C.green, text: "عرض اليوم فقط: خصم 15% على كل السماعات", t: "منذ ساعة", read: false, type: "متجر" },
+    { id: 4, from: "MAM", icon: "🔔", color: C.amber, text: "نقاط ولائك وصلت 8,920 نقطة — استبدلها الآن", t: "أمس", read: true, type: "نظام" },
+  ]);
+
+  const markRead = (id) => {
+    setItems(it => it.map(x => x.id === id ? { ...x, read: true } : x));
+    setUnread(u => Math.max(0, u - 1));
+  };
+
+  return (
+    <div style={{ padding: "18px 16px" }}>
+      <div style={{ fontWeight: 900, fontSize: 17, marginBottom: 4 }}>💬 رسائلي</div>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>من المتاجر والإعلانات الممولة — كل شيء داخل التطبيق</div>
+
+      {items.map(m => (
+        <div key={m.id} onClick={() => markRead(m.id)} className="btn card" style={{ background: m.read ? C.card : `${m.color}10`, borderRadius: 13, padding: 13, border: `1px solid ${m.read ? C.border : m.color + "44"}`, marginBottom: 10, display: "flex", gap: 10, alignItems: "flex-start" }}>
+          <div style={{ width: 38, height: 38, borderRadius: "50%", background: `${m.color}22`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, flexShrink: 0 }}>{m.icon}</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontWeight: 700, fontSize: 12 }}>{m.from}</span>
+              <span style={{ fontSize: 9, color: C.muted }}>{m.t}</span>
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 3, lineHeight: 1.5 }}>{m.text}</div>
+            {m.type === "إعلان" && <span style={pill(`${C.violet}20`, C.violet, { fontSize: 9, marginTop: 6, display: "inline-block" })}>إعلان ممول</span>}
+          </div>
+          {!m.read && <div style={{ width: 8, height: 8, borderRadius: "50%", background: m.color, flexShrink: 0, marginTop: 4 }} />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* — Customer: Smart evolving cart — */
+function SmartCart({ showToast, cart, setCart, setTab }) {
+  const [items, setItems] = useState([
+    { id: 1, n: "iPhone 16 Pro 256GB", p: 4499, qty: 1, img: "📱" },
+    { id: 2, n: "كفر حماية شفاف", p: 49, qty: 1, img: "🛡️" },
+  ]);
+  const [upsellAdded, setUpsellAdded] = useState(false);
+  const total = items.reduce((s, i) => s + i.p * i.qty, 0);
+
+  return (
+    <div style={{ padding: "18px 16px" }}>
+      <div style={{ fontWeight: 900, fontSize: 17, marginBottom: 16 }}>🛒 سلة ذكية تتطور</div>
+
+      {items.map(i => (
+        <div key={i.id} style={{ background: C.card, borderRadius: 12, padding: 12, border: `1px solid ${C.border}`, marginBottom: 10, display: "flex", gap: 10, alignItems: "center" }}>
+          <div style={{ fontSize: 26 }}>{i.img}</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 12 }}>{i.n}</div>
+            <div style={{ fontSize: 11, color: C.muted }}>الكمية: {i.qty}</div>
+          </div>
+          <div style={{ fontWeight: 900, fontSize: 14, color: C.green }}>{i.p} ر.س</div>
+        </div>
+      ))}
+
+      {/* AI alternative suggestion */}
+      <div style={{ background: `${C.amber}12`, border: `1px solid ${C.amber}33`, borderRadius: 12, padding: 12, marginBottom: 12 }}>
+        <div style={{ fontSize: 11, color: C.amber, fontWeight: 700, marginBottom: 6 }}>⚠️ AI لاحظ سعر أفضل</div>
+        <div style={{ fontSize: 12, color: C.muted }}>نفس الكفر متوفر بـ 35 ر.س من متجر آخر بنفس التقييم — توفير 14 ر.س</div>
+        <button className="btn" onClick={() => { setItems(it => it.map(x => x.id === 2 ? { ...x, p: 35 } : x)); showToast("تم التبديل للسعر الأرخص!"); }}
+          style={{ marginTop: 8, background: `${C.amber}22`, color: C.amber, borderRadius: 8, padding: "6px 14px", fontSize: 11, fontWeight: 700 }}>بدّل للأرخص</button>
+      </div>
+
+      {/* Upsell */}
+      {!upsellAdded && (
+        <div style={{ background: `${C.blue}12`, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: C.blue, fontWeight: 700, marginBottom: 6 }}>🤖 منتج مكمّل (Upsell AI)</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 24 }}>🎧</span>
+            <div style={{ flex: 1, fontSize: 12 }}>سماعة AirPods — تناسب جهازك تماماً</div>
+            <button className="btn" onClick={() => { setItems(it => [...it, { id: 3, n: "AirPods Pro", p: 799, qty: 1, img: "🎧" }]); setUpsellAdded(true); showToast("أُضيفت للسلة"); }}
+              style={{ background: grad(), color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 11, fontWeight: 700 }}>أضف</button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ background: C.card, borderRadius: 14, padding: 16, border: `1px solid ${C.border}` }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 900, fontSize: 17, marginBottom: 12 }}>
+          <span>الإجمالي</span><span style={{ color: C.green }}>{total.toLocaleString()} ر.س</span>
+        </div>
+        <button className="btn" onClick={() => { showToast("✅ تم الدفع بنجاح!"); setTab("invoice"); }}
+          style={{ width: "100%", background: grad(), color: "#fff", borderRadius: 12, padding: "13px 0", fontSize: 14, fontWeight: 900 }}>إتمام الشراء 🔒</button>
+      </div>
+    </div>
+  );
+}
+
+/* — Customer: Loyalty Wallet (cards + cashback + reviews) — */
+function LoyaltyWallet({ showToast }) {
+  const [flipped, setFlipped] = useState(false);
+  const cards = [
+    { name: "بطاقة MAM الذهبية", balance: "1,240", points: "8,920", color: grad("#F59E0B", "#EAB308") },
+    { name: "بطاقة الكاش باك", balance: "315", points: "—", color: grad(C.green, C.blue) },
+  ];
+  return (
+    <div style={{ padding: "18px 16px" }}>
+      <div style={{ fontWeight: 900, fontSize: 17, marginBottom: 4 }}>💳 محفظتي</div>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>بطاقاتك، نقاطك، ورصيدك المسترجع — في مكان واحد</div>
+
+      {cards.map((c, i) => (
+        <div key={i} onClick={() => setFlipped(f => !f)} className="btn" style={{ background: c.color, borderRadius: 18, padding: 18, marginBottom: 14, position: "relative", overflow: "hidden", minHeight: 120 }}>
+          <div style={{ position: "absolute", top: -20, left: -20, width: 100, height: 100, borderRadius: "50%", background: "rgba(255,255,255,.08)" }} />
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <div style={{ fontSize: 12, opacity: .85 }}>{c.name}</div>
+            <Logo size={26} />
+          </div>
+          <div style={{ marginTop: 24, fontSize: 22, fontWeight: 900, letterSpacing: 1 }}>{c.balance} ر.س</div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 14, fontSize: 11, opacity: .85 }}>
+            <span>**** **** **** {1000 + i * 234}</span>
+            <span>نقاط: {c.points}</span>
+          </div>
+        </div>
+      ))}
+
+      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>الرصيد المسترجع (Cashback)</div>
+      {[{ n: "إرجاع منتج — كفر هاتف", v: "+49 ر.س", t: "اليوم" }, { n: "نقاط مزاد فاتورة", v: "+120 ر.س", t: "أمس" }, { n: "كاش باك شراء", v: "+22.5 ر.س", t: "قبل 3 أيام" }].map((r, i) => (
+        <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: C.card, borderRadius: 10, padding: 12, marginBottom: 8, border: `1px solid ${C.border}` }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600 }}>{r.n}</div>
+            <div style={{ fontSize: 10, color: C.muted }}>{r.t}</div>
+          </div>
+          <div style={{ fontWeight: 800, color: C.green, fontSize: 13 }}>{r.v}</div>
+        </div>
+      ))}
+
+      <div style={{ fontWeight: 700, fontSize: 14, margin: "16px 0 10px" }}>آرائي الأخيرة</div>
+      {[{ n: "iPhone 16 Pro", stars: 5, txt: "توصيل سريع وجودة ممتازة" }].map((r, i) => (
+        <div key={i} style={{ background: C.card, borderRadius: 10, padding: 12, border: `1px solid ${C.border}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <div style={{ fontSize: 12, fontWeight: 700 }}>{r.n}</div>
+            <div style={{ color: C.amber, fontSize: 12 }}>{"★".repeat(r.stars)}</div>
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{r.txt}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* — Customer: Purchasable Invoice with Ads + Auction — */
+function CustomerInvoice({ showToast }) {
+  const [auctionTime, setAuctionTime] = useState(16 * 60 + 12);
+  const [topBid, setTopBid] = useState(450);
+  const [myBid, setMyBid] = useState(500);
+  const [won, setWon] = useState(false);
+
+  useEffect(() => { const t = setInterval(() => setAuctionTime(s => s > 0 ? s - 1 : 0), 1000); return () => clearInterval(t); }, []);
+  const fmt = s => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+
+  const placeBid = () => {
+    if (myBid <= topBid) { showToast("⚠️ زد المبلغ ليتجاوز أعلى مزايدة"); return; }
+    setTopBid(myBid); setWon(true); showToast(`🏆 فزت بالمزاد بـ ${myBid} ر.س!`);
+  };
+
+  return (
+    <div style={{ padding: "18px 16px" }}>
+      <div style={{ fontWeight: 900, fontSize: 17, marginBottom: 4 }}>🧾 فاتورتي — متجر صغير</div>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>الفاتورة لا تنتهي بالدفع — هي بداية تجربة جديدة</div>
+
+      {/* invoice card */}
+      <div style={{ background: C.card, borderRadius: 16, overflow: "hidden", border: `1px solid ${C.border}`, marginBottom: 14 }}>
+        <div style={{ background: grad(), padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div><div style={{ fontWeight: 900, fontSize: 15 }}>فاتورة #8841</div><div style={{ fontSize: 10, opacity: .8 }}>18 يونيو 2026</div></div>
+          <Logo size={36} />
+        </div>
+        <div style={{ padding: "12px 16px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 8 }}><span>iPhone 16 Pro 256GB</span><span style={{ fontWeight: 700 }}>4,499 ر.س</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.muted }}><span>كفر + شاحن</span><span>238 ر.س</span></div>
+          <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 10, paddingTop: 10, display: "flex", justifyContent: "space-between", fontWeight: 900, fontSize: 16 }}><span>الإجمالي</span><span style={{ color: C.green }}>4,737 ر.س</span></div>
+        </div>
+      </div>
+
+      {/* Ad inside invoice (violet zone = advertiser content) */}
+      <div style={{ background: `linear-gradient(135deg,rgba(124,58,237,.18),rgba(26,111,255,.1))`, border: `1px solid ${C.vBorder}`, borderRadius: 14, padding: 14, marginBottom: 14 }}>
+        <div style={{ fontSize: 10, color: C.muted, marginBottom: 8 }}>🤖 إعلان ذكي — معلن فاز بمزاد هذه المساحة</div>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <span style={{ fontSize: 26 }}>🎧</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 12 }}>AirPods Pro 3 — عرض خاص لمشتري آيفون</div>
+            <div style={{ fontWeight: 900, fontSize: 14, color: C.green }}>799 <span style={{ fontSize: 10, color: C.muted, textDecoration: "line-through" }}>950</span></div>
+          </div>
+          <button className="btn" onClick={() => showToast("أُضيف للسلة من الفاتورة")} style={{ background: grad(C.violet, C.blue), color: "#fff", borderRadius: 9, padding: "7px 12px", fontSize: 11, fontWeight: 700 }}>شراء</button>
+        </div>
+      </div>
+
+      {/* Live auction inside invoice */}
+      <div style={{ background: C.card, borderRadius: 16, overflow: "hidden", border: `2px solid ${won ? C.green : C.red}`, marginBottom: 14 }}>
+        <div style={{ background: won ? grad() : grad(C.red, "#DC2626"), padding: "10px 16px", display: "flex", justifyContent: "space-between" }}>
+          <span style={{ fontWeight: 900, fontSize: 13 }}>{won ? "🏆 فزت بالمزاد" : "🔴 مزاد حي في فاتورتك"}</span>
+          {!won && <span style={{ fontWeight: 900, fontVariantNumeric: "tabular-nums" }}>{fmt(auctionTime)}</span>}
+        </div>
+        <div style={{ padding: "14px 16px" }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
+            <span style={{ fontSize: 28 }}>⌚</span>
+            <div><div style={{ fontWeight: 700, fontSize: 13 }}>ساعة Apple Watch Ultra 2</div><div style={{ fontSize: 10, color: C.muted }}>سعر السوق: 2,950 ر.س</div></div>
+          </div>
+          {!won ? (
+            <>
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>أعلى مزايدة: <b style={{ color: C.amber }}>{topBid} ر.س</b></div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input type="number" value={myBid} onChange={e => setMyBid(+e.target.value)} style={{ flex: 1, background: C.card2, border: `1px solid ${C.border}`, borderRadius: 9, padding: "9px 12px", color: "#fff", fontWeight: 700 }} />
+                <button className="btn" onClick={placeBid} style={{ background: grad(C.red, "#DC2626"), color: "#fff", borderRadius: 9, padding: "9px 16px", fontWeight: 700 }}>زايد</button>
+              </div>
+            </>
+          ) : <div style={{ textAlign: "center", color: C.green, fontWeight: 700 }}>وفّرت {(2950 - myBid).toLocaleString()} ر.س 🎉</div>}
+        </div>
+      </div>
+
+      <button className="btn" onClick={() => showToast("اشترِ مرة أخرى — تكرار آخر طلب")} style={{ width: "100%", background: C.card2, border: `1px solid ${C.border}`, color: C.white, borderRadius: 12, padding: "12px 0", fontSize: 13, fontWeight: 700 }}>🔁 اشترِ مرة أخرى بنقرة واحدة</button>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   ░░░ MERCHANT APP ░░░
+════════════════════════════════════════════════════════════ */
+function MerchantApp({ showToast, onExit }) {
+  const [tab, setTab] = useState("dash");
+  const TABS = [
+    { id: "dash", icon: "📊", label: "اللوحة" },
+    { id: "add", icon: "➕", label: "منتج" },
+    { id: "reverse", icon: "🔥", label: "مزاد الطلبات" },
+    { id: "invoicebot", icon: "🤖", label: "بوت الفوترة" },
+    { id: "msg", icon: "💬", label: "الرسائل" },
+    { id: "score", icon: "⭐", label: "تقييمي" },
+  ];
+  return (
+    <div style={{ paddingBottom: 80 }}>
+      <PortalHeader title="بوابة التاجر" color={C.green} onExit={onExit} />
+      <div className="fadein" key={tab}>
+        {tab === "dash" && <MerchantDash showToast={showToast} />}
+        {tab === "add" && <MerchantAddProduct showToast={showToast} />}
+        {tab === "reverse" && <ReverseMarketplace showToast={showToast} />}
+        {tab === "invoicebot" && <InvoiceBot showToast={showToast} />}
+        {tab === "msg" && <PaidMessaging showToast={showToast} />}
+        {tab === "score" && <StoreScore showToast={showToast} />}
+      </div>
+      <BottomNav items={TABS} active={tab} setActive={setTab} color={C.green} />
+    </div>
+  );
+}
+
+/* — Merchant: AI Invoice Bot — issues, sends, tracks payment automatically
+     + realistic paper-style invoice split: top half = real invoice, bottom half = auctioned ad/discount space */
+function InvoiceBot({ showToast }) {
+  const [view, setView] = useState("البوت");
+  const [botActive, setBotActive] = useState(true);
+  const [autoSend, setAutoSend] = useState(true);
+  const [autoFollow, setAutoFollow] = useState(true);
+
+  const [invoices, setInvoices] = useState([
+    { id: "8841", customer: "أحمد محمد الغامدي", total: 4737, status: "مدفوعة", issuedBy: "بوت AI", t: "منذ 5 دقائق", bottomAd: { sold: true, buyer: "متجر السماعات", offer: "خصم 15% AirPods", price: 45 } },
+    { id: "8839", customer: "سارة العمري", total: 612, status: "بانتظار الدفع", issuedBy: "بوت AI", t: "منذ ساعة", bottomAd: { sold: false } },
+    { id: "8835", customer: "خالد الزهراني", total: 5499, status: "متابعة آلية", issuedBy: "بوت AI", t: "منذ 3 ساعات", bottomAd: { sold: true, buyer: "بيت الجمال", offer: "هدية مجانية عند 200 ر.س", price: 38 } },
+  ]);
+
+  const simulateNewInvoice = () => {
+    const id = String(8800 + Math.floor(Math.random() * 200));
+    setInvoices(inv => [{ id, customer: "عميل جديد", total: Math.floor(Math.random() * 3000 + 200), status: "صدرت تلقائياً", issuedBy: "بوت AI", t: "الآن", bottomAd: { sold: false } }, ...inv]);
+    showToast("🤖 البوت أصدر فاتورة جديدة فور إتمام عملية الشراء");
+  };
+
+  return (
+    <div style={{ padding: "18px 16px" }}>
+      <div style={{ fontWeight: 900, fontSize: 17, marginBottom: 4 }}>🤖 بوت إدارة الفوترة</div>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>يصدر الفاتورة، يرسلها، ويتابع دفعها — بدون تدخل يدوي</div>
+
+      <div style={{ display: "flex", gap: 6, marginBottom: 16, background: C.card2, borderRadius: 12, padding: 4 }}>
+        {["البوت", "الفواتير", "معاينة فاتورة"].map(v => (
+          <button key={v} className="btn" onClick={() => setView(v)} style={{ flex: 1, background: view === v ? grad() : C.card2, color: view === v ? "#fff" : C.muted, borderRadius: 9, padding: "8px 4px", fontSize: 11, fontWeight: 700 }}>{v}</button>
+        ))}
+      </div>
+
+      {/* BOT CONTROL */}
+      {view === "البوت" && (
+        <div className="fadein">
+          <div style={{ background: `${C.green}10`, border: `1px solid ${C.gBorder}`, borderRadius: 14, padding: 14, marginBottom: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <span style={{ fontSize: 18 }}>🤖</span>
+                <div><div style={{ fontWeight: 700, fontSize: 13 }}>بوت الفوترة الذكي</div><div style={{ fontSize: 10, color: C.muted }}>{botActive ? "يعمل الآن" : "متوقف"}</div></div>
+              </div>
+              <button className="btn" onClick={() => { setBotActive(b => !b); showToast(botActive ? "تم إيقاف البوت" : "البوت يعمل الآن"); }}
+                style={{ width: 44, height: 24, borderRadius: 999, background: botActive ? grad() : C.card2, position: "relative", border: "none" }}>
+                <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, [botActive ? "right" : "left"]: 3 }} />
+              </button>
+            </div>
+          </div>
+
+          {[
+            { k: "issue", label: "إصدار الفاتورة تلقائياً عند البيع", state: true, locked: true },
+            { k: "send", label: "إرسالها للعميل فوراً", state: autoSend, set: setAutoSend },
+            { k: "follow", label: "متابعة الدفع وإرسال تذكير تلقائي", state: autoFollow, set: setAutoFollow },
+          ].map(opt => (
+            <div key={opt.k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: C.card, borderRadius: 12, padding: 13, border: `1px solid ${C.border}`, marginBottom: 10 }}>
+              <span style={{ fontSize: 12 }}>{opt.label}</span>
+              {opt.locked ? <span style={pill(`${C.green}20`, C.green, { fontSize: 10 })}>دائم ✓</span> : (
+                <button className="btn" onClick={() => opt.set(s => !s)} style={{ width: 38, height: 20, borderRadius: 999, background: opt.state ? grad() : C.card2, position: "relative", border: "none" }}>
+                  <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, [opt.state ? "right" : "left"]: 3 }} />
+                </button>
+              )}
+            </div>
+          ))}
+
+          <div style={{ background: `${C.blue}10`, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, marginTop: 14, marginBottom: 14 }}>
+            <div style={{ fontSize: 11, color: C.blue, fontWeight: 700, marginBottom: 6 }}>📊 آخر نشاط للبوت</div>
+            {["أصدر فاتورة #8841 خلال 0.4 ثانية من الدفع", "أرسل تذكير دفع لفاتورة #8839 — لم يُفتح بعد", "باع مساحة إعلانية أسفل فاتورة #8835 بـ 38 ر.س"].map((t, i) => (
+              <div key={i} style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>▸ {t}</div>
+            ))}
+          </div>
+
+          <button className="btn" onClick={simulateNewInvoice} style={{ width: "100%", background: grad(), color: "#fff", borderRadius: 12, padding: "12px 0", fontWeight: 800, fontSize: 13 }}>🧪 محاكاة عملية بيع جديدة</button>
+        </div>
+      )}
+
+      {/* INVOICE LIST */}
+      {view === "الفواتير" && (
+        <div className="fadein">
+          {invoices.map(inv => (
+            <div key={inv.id} className="card" style={{ background: C.card, borderRadius: 13, padding: 13, border: `1px solid ${C.border}`, marginBottom: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ fontWeight: 700, fontSize: 13 }}>فاتورة #{inv.id}</span>
+                <span style={pill(inv.status === "مدفوعة" ? `${C.green}22` : `${C.amber}22`, inv.status === "مدفوعة" ? C.green : C.amber, { fontSize: 10 })}>{inv.status}</span>
+              </div>
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>{inv.customer} · {inv.t}</div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontWeight: 900, color: C.green }}>{inv.total.toLocaleString()} ر.س</span>
+                <span style={{ fontSize: 10, color: C.muted }}>🤖 {inv.issuedBy}</span>
+              </div>
+              <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px dashed ${C.border}`, fontSize: 11 }}>
+                {inv.bottomAd.sold ? (
+                  <span style={{ color: C.violet }}>📢 المساحة السفلى مباعة: {inv.bottomAd.buyer} — {inv.bottomAd.offer} ({inv.bottomAd.price} ر.س)</span>
+                ) : (
+                  <span style={{ color: C.muted }}>⬜ المساحة السفلى متاحة للبيع للمعلنين</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* REALISTIC SPLIT INVOICE PREVIEW */}
+      {view === "معاينة فاتورة" && <RealisticInvoicePreview showToast={showToast} />}
+    </div>
+  );
+}
+
+/* realistic paper-style invoice: white background, black lines, top = real invoice, bottom = ad/discount space sold to advertiser */
+function RealisticInvoicePreview({ showToast }) {
+  const [auctionOpen, setAuctionOpen] = useState(true);
+  const [bottomBid, setBottomBid] = useState(38);
+  const [myBid, setMyBid] = useState(45);
+  const [sold, setSold] = useState(false);
+  const [winnerOffer, setWinnerOffer] = useState(null);
+
+  const buySpace = () => {
+    if (myBid <= bottomBid) { showToast("⚠️ زد المبلغ ليتجاوز أعلى عرض"); return; }
+    setBottomBid(myBid); setSold(true); setAuctionOpen(false);
+    setWinnerOffer({ shop: "متجرك", text: "خصم 20% على طلبك القادم — استخدم كود MAM20" });
+    showToast(`🏆 اشتريت المساحة السفلى من الفاتورة بـ ${myBid} ر.س`);
+  };
+
+  return (
+    <div className="fadein">
+      <div style={{ fontSize: 11, color: C.muted, marginBottom: 12, textAlign: "center" }}>هذا شكل الفاتورة الحقيقي الذي يستلمه العميل — ورقي بخطوط سوداء</div>
+
+      {/* PAPER INVOICE */}
+      <div style={{ background: "#FFFFFF", color: "#111", borderRadius: 4, overflow: "hidden", boxShadow: "0 8px 30px rgba(0,0,0,.4)", fontFamily: "Cairo,sans-serif" }}>
+        {/* TOP HALF — real invoice, issued by bot */}
+        <div style={{ padding: "18px 16px", borderBottom: "2px solid #111" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #999", paddingBottom: 10, marginBottom: 10 }}>
+            <div>
+              <div style={{ fontWeight: 900, fontSize: 15 }}>فاتورة ضريبية مبسطة</div>
+              <div style={{ fontSize: 10, color: "#555" }}>متجر التقنية الذهبي — س.ت 1010xxxxxxx</div>
+            </div>
+            <div style={{ textAlign: "left", fontSize: 10, color: "#555" }}>
+              <div>رقم: #8841</div>
+              <div>التاريخ: 19/06/2026</div>
+              <div style={{ color: C.green, fontWeight: 700 }}>🤖 صدرت آلياً عبر بوت MAM</div>
+            </div>
+          </div>
+
+          <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid #111" }}>
+                <th style={{ textAlign: "right", padding: "4px 0" }}>الصنف</th>
+                <th style={{ textAlign: "center", padding: "4px 0" }}>كمية</th>
+                <th style={{ textAlign: "left", padding: "4px 0" }}>السعر</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[["iPhone 16 Pro 256GB", 1, "4,499"], ["كفر + شاحن", 1, "238"]].map((r, i) => (
+                <tr key={i} style={{ borderBottom: "1px dashed #ccc" }}>
+                  <td style={{ padding: "5px 0" }}>{r[0]}</td>
+                  <td style={{ textAlign: "center" }}>{r[1]}</td>
+                  <td style={{ textAlign: "left" }}>{r[2]} ر.س</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div style={{ marginTop: 10, borderTop: "1px solid #111", paddingTop: 8, fontSize: 11 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3, color: "#555" }}><span>الضريبة 15%</span><span>711 ر.س</span></div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 900, fontSize: 14 }}><span>الإجمالي</span><span>5,448 ر.س</span></div>
+          </div>
+        </div>
+
+        {/* BOTTOM HALF — separate space, sold to advertiser */}
+        <div style={{ padding: "16px", background: sold ? "#F5FBF9" : "#FAFAFA", borderTop: "2px dashed #999", position: "relative" }}>
+          <div style={{ position: "absolute", top: -9, left: "50%", transform: "translateX(-50%)", background: "#fff", padding: "0 8px", fontSize: 9, color: "#999" }}>✂ مساحة منفصلة قابلة للبيع</div>
+          {sold && winnerOffer ? (
+            <div className="fadein" style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 10, color: "#888", marginBottom: 4 }}>عرض من معلن خارجي</div>
+              <div style={{ fontWeight: 900, fontSize: 14, color: "#0A1628", marginBottom: 2 }}>🎁 {winnerOffer.text}</div>
+              <div style={{ fontSize: 9, color: "#999" }}>إعلان ممول — اشتراه {winnerOffer.shop} مقابل {bottomBid} ر.س</div>
+            </div>
+          ) : (
+            <div style={{ textAlign: "center", color: "#999", fontSize: 11 }}>هذه المساحة لم تُباع بعد لأي معلن</div>
+          )}
+        </div>
+      </div>
+
+      {/* AUCTION CONTROL (advertiser-side logic shown to merchant for context) */}
+      <div style={{ marginTop: 16, background: C.card, borderRadius: 14, padding: 14, border: `1px solid ${C.vBorder}` }}>
+        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: C.violet }}>🔨 مزاد المساحة السفلى</div>
+        {!sold ? (
+          <>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 10 }}>أعلى عرض حالي: <b style={{ color: C.amber }}>{bottomBid} ر.س</b> — تُباع لأعلى مزايد كل فاتورة</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input type="number" value={myBid} onChange={e => setMyBid(+e.target.value)} style={{ flex: 1, background: C.card2, border: `1px solid ${C.vBorder}`, borderRadius: 9, padding: "9px 12px", color: "#fff" }} />
+              <button className="btn" onClick={buySpace} style={{ background: grad(C.violet, C.blue), color: "#fff", borderRadius: 9, padding: "9px 16px", fontWeight: 700 }}>اشترِ المساحة</button>
+            </div>
+          </>
+        ) : (
+          <div style={{ textAlign: "center", color: C.green, fontWeight: 700, fontSize: 12 }}>✓ تم بيع هذه المساحة — ستظهر في فاتورة العميل القادمة</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MerchantDash({ showToast }) {
+  const [botOn, setBotOn] = useState(true);
+  return (
+    <div style={{ padding: "18px 16px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div><div style={{ fontWeight: 900, fontSize: 17 }}>لوحة التاجر الذكية</div><div style={{ fontSize: 11, color: C.muted }}>متجر التقنية الذهبي 👋</div></div>
+        <span className="pulse" style={pill(`${C.green}22`, C.green)}>● مباشر</span>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10, marginBottom: 16 }}>
+        {[{ icon: "💰", l: "إيرادات اليوم", v: "12,450 ر.س", c: "+18%" }, { icon: "📦", l: "طلبات معلقة", v: "47", c: "جديد 8" }, { icon: "👁️", l: "زيارات", v: "3,280", c: "+24%" }, { icon: "🔄", l: "تحويل", v: "4.2%", c: "+0.8%" }].map(m => (
+          <div key={m.l} style={{ background: C.card, borderRadius: 14, padding: 14, border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 18 }}>{m.icon}</div>
+            <div style={{ fontWeight: 900, fontSize: 17 }}>{m.v}</div>
+            <div style={{ fontSize: 10, color: C.muted }}>{m.l}</div>
+            <div style={{ fontSize: 10, color: C.green, marginTop: 3 }}>{m.c}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* AI bot toggle - "تاجر AI مساعد" */}
+      <div style={{ background: `${C.green}10`, border: `1px solid ${C.gBorder}`, borderRadius: 14, padding: 14, marginBottom: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: botOn ? 10 : 0 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span style={{ fontSize: 18 }}>🤖</span>
+            <div><div style={{ fontWeight: 700, fontSize: 13 }}>تاجر AI المساعد</div><div style={{ fontSize: 10, color: C.muted }}>يرد على العملاء بدلاً عنك</div></div>
+          </div>
+          <button className="btn" onClick={() => { setBotOn(b => !b); showToast(botOn ? "تم إيقاف المساعد" : "تم تفعيل المساعد"); }}
+            style={{ width: 44, height: 24, borderRadius: 999, background: botOn ? grad() : C.card2, position: "relative", border: "none" }}>
+            <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, [botOn ? "right" : "left"]: 3, transition: "all .2s" }} />
+          </button>
+        </div>
+        {botOn && <div style={{ fontSize: 11, color: C.muted }}>رد آخر: "نعم متوفر باللون الأسود، أرسل العنوان للتوصيل 🚚" — منذ دقيقتين</div>}
+      </div>
+
+      {/* AI growth intelligence */}
+      <div style={{ background: `${C.blue}10`, border: `1px solid ${C.border}`, borderRadius: 14, padding: 14, marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 13, color: C.blue, marginBottom: 10 }}>📈 ذكاء نمو التاجر</div>
+        {["بيع غداً متوقع: سماعات لاسلكية (طلب مرتفع بمنطقتك)", "المنافسون رفعوا أسعار الكاميرات 8% — افعل المثل", "أفضل وقت لعرض اليوم: 7-9 مساءً"].map((t, i) => (
+          <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}><span style={{ color: C.blue }}>▸</span><span style={{ fontSize: 12, color: C.muted }}>{t}</span></div>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
+        {[{ icon: "📦", l: "المخزون" }, { icon: "🚚", l: "الطلبات" }, { icon: "📊", l: "التقارير" }].map(a => (
+          <button key={a.l} className="btn" onClick={() => showToast(a.l)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 20 }}>{a.icon}</span><span style={{ fontSize: 11, color: C.muted }}>{a.l}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MerchantAddProduct({ showToast }) {
+  const [name, setName] = useState(""); const [price, setPrice] = useState(""); const [step, setStep] = useState(1);
+  const Field = ({ label, val, set, ph, type = "text" }) => (
+    <div style={{ marginBottom: 14 }}>
+      <label style={{ fontSize: 12, color: C.muted, display: "block", marginBottom: 5, fontWeight: 600 }}>{label}</label>
+      <input type={type} value={val} onChange={e => set(e.target.value)} placeholder={ph} style={{ width: "100%", background: C.card2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 12px", color: "#fff", fontSize: 13 }} />
+    </div>
+  );
+  return (
+    <div style={{ padding: "18px 16px" }}>
+      <div style={{ fontWeight: 900, fontSize: 17, marginBottom: 4 }}>➕ إضافة منتج</div>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>AI يدير التسعير والتسويق تلقائياً بعد النشر</div>
+      <Field label="اسم المنتج" val={name} set={setName} ph="مثال: سماعة لاسلكية" />
+      <Field label="السعر (ر.س)" val={price} set={setPrice} type="number" ph="0.00" />
+      {price && (
+        <div style={{ background: `${C.green}10`, border: `1px solid ${C.gBorder}`, borderRadius: 12, padding: 12, marginBottom: 14 }}>
+          <div style={{ fontSize: 11, color: C.green, fontWeight: 700, marginBottom: 6 }}>🤖 AI يقترح السعر الأمثل</div>
+          <div style={{ fontSize: 12, color: C.muted }}>بناءً على 12 متجر منافس: السعر الأفضل هو <b style={{ color: "#fff" }}>{Math.round(price * 0.96)} ر.س</b> (معدل تحويل أعلى 18%)</div>
+        </div>
+      )}
+      <button className="btn" onClick={() => showToast(`✅ نُشر "${name || "المنتج"}" — AI يدير التسويق الآن`)} style={{ width: "100%", background: grad(), color: "#fff", borderRadius: 12, padding: "13px 0", fontWeight: 900 }}>🚀 نشر — متجر ذاتي التشغيل</button>
+    </div>
+  );
+}
+
+/* — Merchant: Reverse Marketplace (مزاد الطلبات) — */
+function ReverseMarketplace({ showToast }) {
+  const [offers, setOffers] = useState([
+    { id: 1, customer: "عميل في الرياض", item: "لابتوب Gaming بميزانية 4000 ر.س", time: "منذ 3 دقائق", bids: 4, myOffer: null },
+    { id: 2, customer: "عميل في جدة", item: "كاميرا تصوير فيديو احترافية", time: "منذ 8 دقائق", bids: 7, myOffer: "2,650 ر.س" },
+  ]);
+  const [bidVal, setBidVal] = useState("");
+  const [active, setActive] = useState(null);
+
+  const submitOffer = (id) => {
+    if (!bidVal) return;
+    setOffers(o => o.map(x => x.id === id ? { ...x, myOffer: bidVal + " ر.س", bids: x.bids + 1 } : x));
+    showToast("✅ قدّمت عرضك في المزاد العكسي");
+    setActive(null); setBidVal("");
+  };
+
+  return (
+    <div style={{ padding: "18px 16px" }}>
+      <div style={{ fontWeight: 900, fontSize: 17, marginBottom: 4 }}>🔥 مزاد الطلبات العكسي</div>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>العميل يطلب — المتاجر تتنافس بأفضل عرض</div>
+
+      {offers.map(o => (
+        <div key={o.id} className="card" style={{ background: C.card, borderRadius: 14, padding: 14, border: `1px solid ${C.border}`, marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+            <span style={{ fontWeight: 700, fontSize: 13 }}>{o.customer}</span>
+            <span style={{ fontSize: 10, color: C.muted }}>{o.time}</span>
+          </div>
+          <div style={{ fontSize: 13, marginBottom: 8 }}>{o.item}</div>
+          <div style={{ fontSize: 11, color: C.amber, marginBottom: 10 }}>🔴 {o.bids} عروض منافسة حتى الآن</div>
+          {o.myOffer ? (
+            <div style={{ background: `${C.green}15`, color: C.green, borderRadius: 9, padding: "8px 12px", fontSize: 12, fontWeight: 700, textAlign: "center" }}>عرضك: {o.myOffer} ✓</div>
+          ) : active === o.id ? (
+            <div style={{ display: "flex", gap: 8 }}>
+              <input value={bidVal} onChange={e => setBidVal(e.target.value)} placeholder="السعر بالريال" style={{ flex: 1, background: C.card2, border: `1px solid ${C.border}`, borderRadius: 9, padding: "9px 12px", color: "#fff" }} />
+              <button className="btn" onClick={() => submitOffer(o.id)} style={{ background: grad(), color: "#fff", borderRadius: 9, padding: "9px 16px", fontWeight: 700 }}>قدّم</button>
+            </div>
+          ) : (
+            <button className="btn" onClick={() => setActive(o.id)} style={{ width: "100%", background: `${C.blue}18`, color: C.blue, border: `1px solid ${C.border}`, borderRadius: 9, padding: "9px 0", fontWeight: 700, fontSize: 12 }}>قدّم عرضك الآن</button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* — Merchant: Multi-channel Messaging (SMS + Email + In-App, all paid) — */
+function PaidMessaging({ showToast }) {
+  const [view, setView] = useState("صندوق الوارد");
+  const [msg, setMsg] = useState("");
+  const [channels, setChannels] = useState({ app: true, sms: false, email: false });
+  const COSTS = { app: 0.35, sms: 0.6, email: 0.15 };
+  const CHANNEL_LABEL = { app: "📱 داخل التطبيق", sms: "✉️ SMS", email: "📧 إيميل" };
+  const [balance, setBalance] = useState(120.5);
+  const [sentCount, setSentCount] = useState(0);
+  const [log, setLog] = useState([]);
+  const [schedMode, setSchedMode] = useState("ai"); // "ai" | "manual"
+  const [manualDate, setManualDate] = useState("");
+  const [manualTime, setManualTime] = useState("");
+  const [queue, setQueue] = useState([
+    { id: 1, text: "تذكير: عرض نهاية الأسبوع ينتهي قريباً", when: "اليوم 7:30 م", mode: "AI اختار الوقت", channels: "📱 + ✉️" },
+  ]);
+
+  const chats = [
+    { name: "أحمد محمد", last: "هل متوفر باللون الأسود؟", time: "الآن", unread: 1, avatar: "👨" },
+    { name: "سارة العمري", last: "شكراً للتوصيل السريع", time: "أمس", unread: 0, avatar: "👩" },
+  ];
+  const TEMPLATES = ["مرحباً! كيف أقدر أساعدك؟", "عرض خاص لك: خصم 15% اليوم فقط!", "طلبك رقم #1234 في الطريق 🚚"];
+
+  const activeChannels = Object.entries(channels).filter(([, v]) => v).map(([k]) => k);
+  const costPerCustomer = activeChannels.reduce((s, k) => s + COSTS[k], 0);
+  const totalCost = +(costPerCustomer * chats.length).toFixed(2);
+
+  const toggleChannel = k => setChannels(c => ({ ...c, [k]: !c[k] }));
+
+  const sendBulk = () => {
+    if (activeChannels.length === 0) { showToast("⚠️ اختر قناة إرسال واحدة على الأقل"); return; }
+    if (totalCost > balance) { showToast("⚠️ رصيدك غير كافٍ — اشحن رصيد الرسائل"); return; }
+    setBalance(b => +(b - totalCost).toFixed(2));
+    setSentCount(s => s + chats.length);
+    setLog(l => [{ channels: activeChannels.map(c => CHANNEL_LABEL[c]).join(" + "), reach: chats.length, cost: totalCost, t: "الآن" }, ...l]);
+    showToast(`📤 أُرسلت عبر ${activeChannels.length} قناة لـ ${chats.length} عملاء — خُصم ${totalCost} ر.س`);
+  };
+
+  const scheduleBulk = () => {
+    if (!msg.trim()) { showToast("⚠️ اكتب نص الرسالة أولاً"); return; }
+    if (activeChannels.length === 0) { showToast("⚠️ اختر قناة إرسال واحدة على الأقل"); return; }
+    let whenLabel;
+    if (schedMode === "ai") {
+      whenLabel = "AI اختار: غداً 7:45 م (أعلى احتمال فتح)";
+    } else {
+      if (!manualDate || !manualTime) { showToast("⚠️ حدد التاريخ والوقت"); return; }
+      whenLabel = `${manualDate} — ${manualTime}`;
+    }
+    setQueue(q => [{ id: Date.now(), text: msg, when: whenLabel, mode: schedMode === "ai" ? "AI اختار الوقت" : "وقت يدوي", channels: activeChannels.map(c => CHANNEL_LABEL[c].split(" ")[0]).join(" ") }, ...q]);
+    showToast(schedMode === "ai" ? "🤖 جدولت الرسالة — AI سيرسلها بأفضل توقيت" : "✅ جدولت الرسالة للوقت المحدد");
+    setMsg("");
+  };
+
+  return (
+    <div style={{ padding: "18px 16px" }}>
+      <div style={{ fontWeight: 900, fontSize: 17, marginBottom: 4 }}>💬 مركز الرسائل متعدد القنوات</div>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>SMS + إيميل + إشعار داخل التطبيق — كل قناة برسوم منفصلة</div>
+
+      <div style={{ background: `linear-gradient(135deg,${C.green}18,${C.blue}10)`, border: `1px solid ${C.gBorder}`, borderRadius: 14, padding: 14, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div><div style={{ fontSize: 11, color: C.muted }}>رصيد الرسائل</div><div style={{ fontWeight: 900, fontSize: 20, color: C.green }}>{balance.toFixed(2)} ر.س</div></div>
+        <button className="btn" onClick={() => { setBalance(b => b + 50); showToast("✅ شحن 50 ر.س"); }} style={{ background: grad(), color: "#fff", borderRadius: 9, padding: "9px 16px", fontSize: 12, fontWeight: 700 }}>اشحن رصيد +</button>
+      </div>
+
+      <div style={{ display: "flex", gap: 6, marginBottom: 16, background: C.card2, borderRadius: 12, padding: 4, overflowX: "auto" }}>
+        {["صندوق الوارد", "إرسال جماعي", "جدولة مستقبلية", "سجل الإرسال"].map(v => (
+          <button key={v} className="btn" onClick={() => setView(v)} style={{ flex: 1, background: view === v ? grad() : C.card2, color: view === v ? "#fff" : C.muted, borderRadius: 9, padding: "8px 4px", fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap" }}>{v}</button>
+        ))}
+      </div>
+
+      {view === "صندوق الوارد" && chats.map((c, i) => (
+        <div key={i} style={{ background: C.card, borderRadius: 12, padding: 12, border: `1px solid ${C.border}`, marginBottom: 10, display: "flex", gap: 10, alignItems: "center" }}>
+          <div style={{ width: 40, height: 40, borderRadius: "50%", background: grad(), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{c.avatar}</div>
+          <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 13 }}>{c.name}</div><div style={{ fontSize: 11, color: C.muted }}>{c.last}</div></div>
+          {c.unread > 0 && <div style={{ width: 18, height: 18, borderRadius: "50%", background: C.green, color: C.navy, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 900 }}>{c.unread}</div>}
+        </div>
+      ))}
+
+      {view === "إرسال جماعي" && (
+        <div>
+          {/* Channel picker */}
+          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>اختر القنوات</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 14 }}>
+            {Object.keys(CHANNEL_LABEL).map(k => (
+              <button key={k} className="btn" onClick={() => toggleChannel(k)}
+                style={{ background: channels[k] ? `${C.blue}22` : C.card, border: `1px solid ${channels[k] ? C.border : C.border}`, borderRadius: 11, padding: "10px 6px", textAlign: "center" }}>
+                <div style={{ fontSize: 16, marginBottom: 4 }}>{CHANNEL_LABEL[k].split(" ")[0]}</div>
+                <div style={{ fontSize: 10, color: channels[k] ? C.blue : C.muted }}>{CHANNEL_LABEL[k].split(" ").slice(1).join(" ")}</div>
+                <div style={{ fontSize: 9, color: C.muted, marginTop: 2 }}>{COSTS[k]} ر.س</div>
+              </button>
+            ))}
+          </div>
+
+          <div style={{ fontSize: 11, color: C.muted, marginBottom: 10 }}>
+            سيُرسل عبر {activeChannels.length || 0} قناة لـ {chats.length} عملاء — التكلفة: <b style={{ color: C.amber }}>{totalCost.toFixed(2)} ر.س</b>
+          </div>
+
+          {TEMPLATES.map((t, i) => (
+            <button key={i} className="btn" onClick={() => setMsg(t)} style={{ display: "block", width: "100%", textAlign: "right", background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 12px", fontSize: 12, marginBottom: 8 }}>{t}</button>
+          ))}
+          <textarea value={msg} onChange={e => setMsg(e.target.value)} rows={3} placeholder="أو اكتب رسالتك..." style={{ width: "100%", background: C.card2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 12px", color: "#fff", fontSize: 13, resize: "none", marginBottom: 10 }} />
+          <button className="btn" onClick={sendBulk} style={{ width: "100%", background: grad(), color: "#fff", borderRadius: 12, padding: "13px 0", fontWeight: 900 }}>📤 إرسال الآن</button>
+          {sentCount > 0 && <div style={{ fontSize: 11, color: C.muted, marginTop: 8, textAlign: "center" }}>أُرسل {sentCount} رسالة هذا الشهر</div>}
+        </div>
+      )}
+
+      {view === "جدولة مستقبلية" && (
+        <div>
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>اختر متى تُرسل الرسالة — يدوياً أو بقرار من AI</div>
+
+          {/* mode toggle */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+            <button className="btn" onClick={() => setSchedMode("ai")}
+              style={{ background: schedMode === "ai" ? `${C.green}22` : C.card, border: `1px solid ${schedMode === "ai" ? C.gBorder : C.border}`, borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
+              <div style={{ fontSize: 18, marginBottom: 4 }}>🤖</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: schedMode === "ai" ? C.green : C.white }}>AI يختار الوقت</div>
+              <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>أعلى احتمال فتح</div>
+            </button>
+            <button className="btn" onClick={() => setSchedMode("manual")}
+              style={{ background: schedMode === "manual" ? `${C.blue}22` : C.card, border: `1px solid ${schedMode === "manual" ? C.border : C.border}`, borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
+              <div style={{ fontSize: 18, marginBottom: 4 }}>📅</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: schedMode === "manual" ? C.blue : C.white }}>أحدد الوقت بنفسي</div>
+              <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>تاريخ ووقت يدوي</div>
+            </button>
+          </div>
+
+          {schedMode === "ai" ? (
+            <div style={{ background: `${C.green}10`, border: `1px solid ${C.gBorder}`, borderRadius: 12, padding: 12, marginBottom: 14 }}>
+              <div style={{ fontSize: 12, color: C.green, fontWeight: 700, marginBottom: 6 }}>🤖 توقع AI لأفضل وقت</div>
+              <div style={{ fontSize: 12, color: C.muted }}>بناءً على سلوك عملائك: غداً <b style={{ color: "#fff" }}>7:45 مساءً</b> — احتمال فتح متوقع 78%</div>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+              <div>
+                <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 5 }}>التاريخ</label>
+                <input type="date" value={manualDate} onChange={e => setManualDate(e.target.value)} style={{ width: "100%", background: C.card2, border: `1px solid ${C.border}`, borderRadius: 9, padding: "9px 10px", color: "#fff", fontSize: 12 }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 5 }}>الوقت</label>
+                <input type="time" value={manualTime} onChange={e => setManualTime(e.target.value)} style={{ width: "100%", background: C.card2, border: `1px solid ${C.border}`, borderRadius: 9, padding: "9px 10px", color: "#fff", fontSize: 12 }} />
+              </div>
+            </div>
+          )}
+
+          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>القنوات</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 14 }}>
+            {Object.keys(CHANNEL_LABEL).map(k => (
+              <button key={k} className="btn" onClick={() => toggleChannel(k)}
+                style={{ background: channels[k] ? `${C.blue}22` : C.card, border: `1px solid ${C.border}`, borderRadius: 11, padding: "9px 6px", textAlign: "center" }}>
+                <div style={{ fontSize: 14 }}>{CHANNEL_LABEL[k].split(" ")[0]}</div>
+                <div style={{ fontSize: 9, color: channels[k] ? C.blue : C.muted }}>{CHANNEL_LABEL[k].split(" ").slice(1).join(" ")}</div>
+              </button>
+            ))}
+          </div>
+
+          <textarea value={msg} onChange={e => setMsg(e.target.value)} rows={3} placeholder="نص الرسالة..." style={{ width: "100%", background: C.card2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 12px", color: "#fff", fontSize: 13, resize: "none", marginBottom: 12 }} />
+          <button className="btn" onClick={scheduleBulk} style={{ width: "100%", background: grad(), color: "#fff", borderRadius: 12, padding: "13px 0", fontWeight: 900, marginBottom: 18 }}>
+            {schedMode === "ai" ? "🤖 جدول بقرار AI" : "📅 جدول للوقت المحدد"}
+          </button>
+
+          {/* queue list */}
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>قائمة الانتظار ({queue.length})</div>
+          {queue.map(q => (
+            <div key={q.id} style={{ background: C.card, borderRadius: 12, padding: 12, border: `1px solid ${C.border}`, marginBottom: 8 }}>
+              <div style={{ fontSize: 12, marginBottom: 6 }}>{q.text}</div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: C.muted }}>
+                <span>⏰ {q.when}</span>
+                <span style={pill(q.mode.includes("AI") ? `${C.green}20` : `${C.blue}20`, q.mode.includes("AI") ? C.green : C.blue, { fontSize: 9 })}>{q.mode}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {view === "سجل الإرسال" && (
+        <div>
+          {log.length === 0 && <div style={{ textAlign: "center", color: C.muted, fontSize: 12, padding: "30px 0" }}>لا يوجد إرسال بعد</div>}
+          {log.map((l, i) => (
+            <div key={i} style={{ background: C.card, borderRadius: 12, padding: 12, border: `1px solid ${C.border}`, marginBottom: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontWeight: 700, fontSize: 12 }}>{l.channels}</span>
+                <span style={{ fontSize: 10, color: C.muted }}>{l.t}</span>
+              </div>
+              <div style={{ fontSize: 11, color: C.muted }}>وصلت لـ {l.reach} عملاء — تكلفة {l.cost} ر.س</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StoreScore({ showToast }) {
+  const metrics = [{ l: "سرعة التوصيل", v: 92, c: C.blue }, { l: "رضا العملاء", v: 96, c: C.green }, { l: "جودة المنتجات", v: 89, c: C.violet }, { l: "الرد السريع", v: 98, c: C.amber }];
+  const score = Math.round(metrics.reduce((s, m) => s + m.v, 0) / metrics.length);
+  const [anim, setAnim] = useState(false);
+  useEffect(() => { setTimeout(() => setAnim(true), 200); }, []);
+  return (
+    <div style={{ padding: "18px 16px" }}>
+      <div style={{ fontWeight: 900, fontSize: 17, marginBottom: 16 }}>⭐ نقاط متجرك (Store Score)</div>
+      <div style={{ textAlign: "center", marginBottom: 20 }}>
+        <div style={{ width: 130, height: 130, borderRadius: "50%", margin: "0 auto", background: `conic-gradient(${C.green} ${score * 3.6}deg, ${C.card2} 0deg)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: 104, height: 104, borderRadius: "50%", background: C.navy, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ fontWeight: 900, fontSize: 30, color: C.green }}>{score}</div>
+            <div style={{ fontSize: 10, color: C.muted }}>من 100</div>
+          </div>
+        </div>
+        <div style={{ marginTop: 10, fontSize: 12, color: C.green, fontWeight: 700 }}>أعلى من 88% من المتاجر — يظهر بنتائج البحث الأولى</div>
+      </div>
+      {metrics.map(m => (
+        <div key={m.l} style={{ marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 5 }}><span style={{ color: C.muted }}>{m.l}</span><span style={{ color: m.c, fontWeight: 700 }}>{m.v}%</span></div>
+          <div style={{ height: 8, background: C.card2, borderRadius: 999, overflow: "hidden" }}><div style={{ height: "100%", width: anim ? `${m.v}%` : "0%", background: m.c, borderRadius: 999, transition: "width 1s" }} /></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   ░░░ ADVERTISER APP ░░░ (violet accent)
+════════════════════════════════════════════════════════════ */
+function AdvertiserApp({ showToast, onExit }) {
+  const [tab, setTab] = useState("bid");
+  const TABS = [
+    { id: "bid", icon: "⚡", label: "مزايدة حية" },
+    { id: "spaces", icon: "🎯", label: "المساحات" },
+    { id: "invoiceAd", icon: "🧾", label: "إعلان فاتورة" },
+    { id: "targeting", icon: "📍", label: "الاستهداف" },
+    { id: "report", icon: "📈", label: "التقارير" },
+  ];
+  return (
+    <div style={{ paddingBottom: 80 }}>
+      <PortalHeader title="بوابة المعلن" color={C.violet} onExit={onExit} />
+      <div className="fadein" key={tab}>
+        {tab === "bid" && <LiveBidding showToast={showToast} />}
+        {tab === "spaces" && <AdSpaces showToast={showToast} />}
+        {tab === "invoiceAd" && <InvoiceAdTargeting showToast={showToast} />}
+        {tab === "targeting" && <Targeting showToast={showToast} />}
+        {tab === "report" && <AdReport />}
+      </div>
+      <BottomNav items={TABS} active={tab} setActive={setTab} color={C.violet} />
+    </div>
+  );
+}
+
+function LiveBidding({ showToast }) {
+  const [slots, setSlots] = useState([
+    { id: 1, name: "بحث: ساعات ذكية", top: 4.2, time: 12, competitors: 6 },
+    { id: 2, name: "فاتورة: مشتري آيفون", top: 6.8, time: 28, competitors: 9 },
+    { id: 3, name: "صفحة منتج: لابتوبات", top: 3.1, time: 45, competitors: 4 },
+  ]);
+  const [myBid, setMyBid] = useState({});
+  const [won, setWon] = useState({});
+  const [anim, setAnim] = useState(null);
+
+  useEffect(() => {
+    const t = setInterval(() => setSlots(s => s.map(x => ({ ...x, time: x.time > 0 ? x.time - 1 : 60 }))), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const bid = (id, top) => {
+    const v = myBid[id] || top + 1;
+    if (v <= top) { showToast("زد المبلغ"); return; }
+    setSlots(s => s.map(x => x.id === id ? { ...x, top: v } : x));
+    setWon(w => ({ ...w, [id]: true }));
+    setAnim(id); setTimeout(() => setAnim(null), 600);
+    showToast(`🏆 فزت بمساحة "${slots.find(x => x.id === id).name}" بـ ${v} ر.س`);
+  };
+
+  return (
+    <div style={{ padding: "18px 16px" }}>
+      <div style={{ fontWeight: 900, fontSize: 17, marginBottom: 4 }}>⚡ مزايدة AI لحظية</div>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Real-Time Bidding — يُحسم الفوز خلال أجزاء من الثانية</div>
+
+      {slots.map(s => (
+        <div key={s.id} className={anim === s.id ? "bidpulse" : ""} style={{ background: C.card, borderRadius: 14, padding: 14, border: `1px solid ${won[s.id] ? C.green : C.vBorder}`, marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+            <span style={{ fontWeight: 700, fontSize: 13 }}>{s.name}</span>
+            <span style={pill(won[s.id] ? `${C.green}22` : `${C.violet}22`, won[s.id] ? C.green : C.violet)}>{won[s.id] ? "🏆 فائز" : `${s.time}s`}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.muted, marginBottom: 10 }}>
+            <span>أعلى مزايدة: <b style={{ color: C.amber }}>{s.top.toFixed(1)} ر.س CPM</b></span>
+            <span>منافسون: {s.competitors}</span>
+          </div>
+          {!won[s.id] && (
+            <div style={{ display: "flex", gap: 8 }}>
+              <input type="number" step="0.1" placeholder={`> ${s.top.toFixed(1)}`} onChange={e => setMyBid(m => ({ ...m, [s.id]: +e.target.value }))}
+                style={{ flex: 1, background: C.card2, border: `1px solid ${C.vBorder}`, borderRadius: 9, padding: "9px 12px", color: "#fff" }} />
+              <button className="btn" onClick={() => bid(s.id, s.top)} style={{ background: grad(C.violet, C.blue), color: "#fff", borderRadius: 9, padding: "9px 18px", fontWeight: 700 }}>زايد ⚡</button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AdSpaces({ showToast }) {
+  const spaces = [
+    { name: "داخل الفاتورة", desc: "بعد الدفع مباشرة — أعلى نية شراء", cpm: 6.0, icon: "🧾" },
+    { name: "صفحة البحث (أعلى نتيجة)", desc: "يظهر أول 3 نتائج بحث", cpm: 12.0, icon: "🔍" },
+    { name: "صفحة المنتج", desc: "إعلان منتج مشابه أو مكمّل", cpm: 8.5, icon: "🛍️" },
+    { name: "رسائل AI مخصصة", desc: "رسالة مدفوعة للعميل المستهدف", cpm: 15.0, icon: "💬" },
+  ];
+  return (
+    <div style={{ padding: "18px 16px" }}>
+      <div style={{ fontWeight: 900, fontSize: 17, marginBottom: 16 }}>🎯 شراء مساحات إعلانية</div>
+      {spaces.map(s => (
+        <div key={s.name} className="card" style={{ background: C.card, borderRadius: 14, padding: 14, border: `1px solid ${C.vBorder}`, marginBottom: 12 }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
+            <div style={{ width: 42, height: 42, borderRadius: 11, background: `${C.violet}22`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{s.icon}</div>
+            <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 13 }}>{s.name}</div><div style={{ fontSize: 11, color: C.muted }}>{s.desc}</div></div>
+            <div style={{ textAlign: "left" }}><div style={{ fontWeight: 900, color: C.violet }}>{s.cpm}</div><div style={{ fontSize: 9, color: C.muted }}>ر.س/1K</div></div>
+          </div>
+          <button className="btn" onClick={() => showToast(`تم حجز "${s.name}"`)} style={{ width: "100%", background: `${C.violet}18`, color: C.violet, border: `1px solid ${C.vBorder}`, borderRadius: 9, padding: "9px 0", fontWeight: 700, fontSize: 12 }}>احجز هذه المساحة</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* — Advertiser: Buy ad space inside a SPECIFIC customer's invoice — */
+function InvoiceAdTargeting({ showToast }) {
+  const [picked, setPicked] = useState(null);
+  const [adTitle, setAdTitle] = useState("");
+  const [adPrice, setAdPrice] = useState("");
+  const [sent, setSent] = useState({});
+
+  const customers = [
+    { id: 1, name: "أحمد محمد الغامدي", lastBuy: "iPhone 16 Pro Max", invoiceId: "#8841", time: "منذ دقيقتين", avatar: "👨", interest: "إلكترونيات" },
+    { id: 2, name: "سارة العمري", lastBuy: "فستان سهرة", invoiceId: "#8839", time: "منذ ساعة", avatar: "👩", interest: "أزياء" },
+    { id: 3, name: "خالد الزهراني", lastBuy: "لابتوب Gaming", invoiceId: "#8835", time: "منذ 3 ساعات", avatar: "👨‍💼", interest: "إلكترونيات" },
+  ];
+
+  const send = (id) => {
+    if (!adTitle || !adPrice) { showToast("⚠️ أكمل بيانات الإعلان أولاً"); return; }
+    setSent(s => ({ ...s, [id]: true }));
+    showToast(`📨 أُرسل إعلانك ليظهر داخل فاتورة ${customers.find(c => c.id === id).name}`);
+  };
+
+  return (
+    <div style={{ padding: "18px 16px" }}>
+      <div style={{ fontWeight: 900, fontSize: 17, marginBottom: 4 }}>🧾 استهداف عميل داخل فاتورته</div>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>اختر عميلاً محدداً — يظهر إعلانك في فاتورته القادمة مباشرة بعد الدفع</div>
+
+      {/* Ad creative form */}
+      <div style={{ background: C.card, borderRadius: 14, padding: 14, border: `1px solid ${C.vBorder}`, marginBottom: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>محتوى الإعلان</div>
+        <input value={adTitle} onChange={e => setAdTitle(e.target.value)} placeholder="مثال: AirPods Pro 3 بعرض خاص"
+          style={{ width: "100%", background: C.card2, border: `1px solid ${C.vBorder}`, borderRadius: 9, padding: "9px 12px", color: "#fff", fontSize: 12, marginBottom: 10 }} />
+        <input value={adPrice} onChange={e => setAdPrice(e.target.value)} type="number" placeholder="السعر المعروض (ر.س)"
+          style={{ width: "100%", background: C.card2, border: `1px solid ${C.vBorder}`, borderRadius: 9, padding: "9px 12px", color: "#fff", fontSize: 12 }} />
+      </div>
+
+      {/* AI-matched customers */}
+      <div style={{ fontSize: 12, color: C.violet, fontWeight: 700, marginBottom: 10 }}>🤖 عملاء دفعوا للتو — مطابقون لاهتمامك</div>
+      {customers.map(c => (
+        <div key={c.id} className="card" style={{ background: C.card, borderRadius: 14, padding: 14, border: `1px solid ${sent[c.id] ? C.gBorder : C.border}`, marginBottom: 12 }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
+            <div style={{ width: 42, height: 42, borderRadius: "50%", background: grad(C.violet, C.blue), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 19 }}>{c.avatar}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>{c.name}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>اشترى: {c.lastBuy} · فاتورة {c.invoiceId}</div>
+            </div>
+            <span style={{ fontSize: 10, color: C.muted }}>{c.time}</span>
+          </div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+            <span style={pill(`${C.violet}18`, C.violet, { fontSize: 10 })}>اهتمام: {c.interest}</span>
+            <span style={pill(`${C.green}18`, C.green, { fontSize: 10 })}>نية شراء عالية</span>
+          </div>
+          {sent[c.id] ? (
+            <div style={{ background: `${C.green}15`, color: C.green, borderRadius: 9, padding: "8px 0", fontSize: 12, fontWeight: 700, textAlign: "center" }}>✓ تم الإرسال — بانتظار فتح العميل للفاتورة</div>
+          ) : (
+            <button className="btn" onClick={() => send(c.id)} style={{ width: "100%", background: grad(C.violet, C.blue), color: "#fff", borderRadius: 9, padding: "9px 0", fontWeight: 700, fontSize: 12 }}>
+              📨 أرسل الإعلان لفاتورة هذا العميل
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Targeting({ showToast }) {
+  const [sel, setSel] = useState({ geo: true, behavior: true, intent: false });
+  const OPTS = [{ k: "geo", l: "📍 الموقع الجغرافي", d: "استهدف مدن أو أحياء محددة" }, { k: "behavior", l: "🧠 سلوك المستخدم", d: "بناءً على تصفحه ومشترياته" }, { k: "intent", l: "🎯 نية الشراء المتوقعة", d: "AI يتوقع شراء خلال 24 ساعة" }];
+  return (
+    <div style={{ padding: "18px 16px" }}>
+      <div style={{ fontWeight: 900, fontSize: 17, marginBottom: 16 }}>📍 استهداف ذكي</div>
+      {OPTS.map(o => (
+        <button key={o.k} className="btn" onClick={() => setSel(s => ({ ...s, [o.k]: !s[o.k] }))} style={{ width: "100%", textAlign: "right", background: sel[o.k] ? `${C.violet}18` : C.card, border: `1px solid ${sel[o.k] ? C.vBorder : C.border}`, borderRadius: 14, padding: 14, marginBottom: 10, display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 20, height: 20, borderRadius: 6, border: `2px solid ${sel[o.k] ? C.violet : C.muted}`, background: sel[o.k] ? C.violet : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>{sel[o.k] && "✓"}</div>
+          <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 13 }}>{o.l}</div><div style={{ fontSize: 11, color: C.muted }}>{o.d}</div></div>
+        </button>
+      ))}
+      {sel.intent && (
+        <div style={{ background: `${C.violet}10`, border: `1px solid ${C.vBorder}`, borderRadius: 12, padding: 12, marginBottom: 14 }}>
+          <div style={{ fontSize: 12, color: C.violet, fontWeight: 700, marginBottom: 6 }}>🔮 توقع AI نشط</div>
+          <div style={{ fontSize: 11, color: C.muted }}>2,840 عميل متوقع شراؤهم خلال 24 ساعة في فئتك — إعلانك سيظهر في اللحظة المثالية قبل الشراء</div>
+        </div>
+      )}
+      <button className="btn" onClick={() => showToast("✅ استهداف محفوظ")} style={{ width: "100%", background: grad(C.violet, C.blue), color: "#fff", borderRadius: 12, padding: "13px 0", fontWeight: 900 }}>حفظ الاستهداف</button>
+    </div>
+  );
+}
+
+function AdReport() {
+  const stats = [{ l: "الظهور", v: "48,200", c: C.violet }, { l: "النقرات", v: "1,840", c: C.blue }, { l: "تحويل", v: "3.8%", c: C.green }, { l: "تكلفة/نقرة", v: "2.1 ر.س", c: C.amber }];
+  return (
+    <div style={{ padding: "18px 16px" }}>
+      <div style={{ fontWeight: 900, fontSize: 17, marginBottom: 16 }}>📈 تقارير الأداء</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10, marginBottom: 16 }}>
+        {stats.map(s => (
+          <div key={s.l} style={{ background: C.card, borderRadius: 14, padding: 14, border: `1px solid ${C.vBorder}`, textAlign: "center" }}>
+            <div style={{ fontWeight: 900, fontSize: 20, color: s.c }}>{s.v}</div><div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{s.l}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>الأداء حسب المساحة</div>
+      {[{ n: "داخل الفاتورة", ctr: 11.2 }, { n: "نتائج البحث", ctr: 8.4 }, { n: "صفحة المنتج", ctr: 6.1 }].map(r => (
+        <div key={r.n} style={{ marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 5 }}><span style={{ color: C.muted }}>{r.n}</span><span style={{ color: C.violet, fontWeight: 700 }}>{r.ctr}%</span></div>
+          <div style={{ height: 8, background: C.card2, borderRadius: 999, overflow: "hidden" }}><div style={{ height: "100%", width: `${r.ctr * 6}%`, background: grad(C.violet, C.blue), borderRadius: 999 }} /></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>
